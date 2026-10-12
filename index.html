@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midterm countdown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e8edf0;--ink:#122033;--mute:#55657a;--line:#c6d0d8;--panel:#fff;--hero:#0b3d3a;--heroink:#f1faf8;--heromute:#9fd0c8;--accent:#0b6e63}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1a22;--ink:#e6eef2;--mute:#8da0b0;--line:#25363f;--panel:#14232d;--hero:#0b3d3a;--accent:#5fc7b8}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;padding:max(20px,env(safe-area-inset-top)) 20px 40px}
+main{max-width:860px;margin:0 auto}
+h1{font-size:1rem;font-weight:600;color:var(--mute);margin:8px 0 16px}
+.hero{background:var(--hero);color:var(--heroink);border-radius:16px;padding:28px clamp(20px,5vw,40px)}
+.hero .state{color:var(--heromute);font-size:.95rem;margin:0}
+.hero h2{font-size:clamp(2.2rem,8vw,3.6rem);font-weight:800;line-height:1.05;margin:4px 0 6px;letter-spacing:-.02em}
+.hero .meta{margin:0;color:var(--heromute)}
+.clock{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:24px}
+.cell{border:1px solid rgba(241,250,248,.28);border-radius:10px;padding:12px 8px;text-align:center}
+.cell b{display:block;font-size:clamp(1.8rem,8vw,3rem);font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.cell span{font-size:.85rem;color:var(--heromute)}
+h2.sub{font-size:1.1rem;margin:32px 0 12px}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.exam{display:grid;grid-template-columns:130px 1fr auto;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:14px 18px}
+.exam.done{opacity:.55;border-left-color:var(--line)}
+.exam.live{border-left-color:#c2410c}
+.when b{display:block;font-size:1.05rem}
+.when span,.what p{color:var(--mute);font-size:.9rem;margin:0}
+.what h3{margin:0;font-size:1.25rem}
+.left{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.note{color:var(--mute);font-size:.85rem;margin-top:24px}
+@media (max-width:600px){.exam{grid-template-columns:1fr;gap:6px}.left{text-align:left}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Midterm exams, first semester 2027</h1>
+
+  <section class="hero" aria-live="off">
+    <p class="state" id="hState"></p>
+    <h2 id="hCourse"></h2>
+    <p class="meta" id="hMeta"></p>
+    <div class="clock" id="clock">
+      <div class="cell"><b id="cD">0</b><span>days</span></div>
+      <div class="cell"><b id="cH">00</b><span>hours</span></div>
+      <div class="cell"><b id="cM">00</b><span>minutes</span></div>
+      <div class="cell"><b id="cS">00</b><span>seconds</span></div>
+    </div>
+  </section>
+
+  <h2 class="sub">All your exams</h2>
+  <ul id="list"></ul>
+
+  <p class="note">Based on the draft version of the FCIT midterm timetable. All times are Saudi Arabia time (UTC+3). Check for the final version before exam day.</p>
+</main>
+
+<script>
+// Edit this list if the timetable changes. Times use Saudi Arabia time (+03:00).
+const EXAMS = [
+  { course: "CPIS-428", date: "2026-10-19", from: "09:00", to: "10:30", hijri: "08/05/1448", rooms: "H1-3 + H1-6 + H1-7 + H2-4 + H2-6", students: 188 },
+  { course: "CPIT-405", date: "2026-10-22", from: "09:00", to: "10:30", hijri: "11/05/1448", rooms: "H1-7 + H2-4", students: 73 },
+  { course: "CPIT-425", date: "2026-10-26", from: "15:00", to: "16:30", hijri: "15/05/1448", rooms: "H1-9", students: 28 },
+  { course: "CPIT-475", date: "2026-10-27", from: "15:00", to: "16:30", hijri: "16/05/1448", rooms: "H1-3", students: 23 }
+].map(e => ({ ...e, start: new Date(`${e.date}T${e.from}:00+03:00`), end: new Date(`${e.date}T${e.to}:00+03:00`) }));
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const dayFmt = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Riyadh" });
+const shortFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Riyadh" });
+
+function parts(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return { d: Math.floor(s / 86400), h: Math.floor(s % 86400 / 3600), m: Math.floor(s % 3600 / 60), s: s % 60 };
+}
+
+// Build the list once
+const list = $("list");
+EXAMS.forEach((e, i) => {
+  const li = document.createElement("li");
+  li.className = "exam";
+  li.id = "ex" + i;
+  li.innerHTML = `
+    <div class="when"><b></b><span></span></div>
+    <div class="what"><h3></h3><p class="t"></p><p class="r"></p></div>
+    <div class="left"></div>`;
+  li.querySelector(".when b").textContent = shortFmt.format(e.start);
+  li.querySelector(".when span").textContent = e.hijri + " AH";
+  li.querySelector("h3").textContent = e.course;
+  li.querySelector(".t").textContent = `${e.from} to ${e.to}, Building 80A`;
+  li.querySelector(".r").textContent = `Rooms ${e.rooms} (${e.students} students)`;
+  list.appendChild(li);
+});
+
+function tick() {
+  const now = new Date();
+  EXAMS.forEach((e, i) => {
+    const li = $("ex" + i), left = li.querySelector(".left");
+    li.classList.remove("done", "live");
+    if (now >= e.end) { li.classList.add("done"); left.textContent = "Finished"; }
+    else if (now >= e.start) { li.classList.add("live"); left.textContent = "In progress"; }
+    else { const p = parts(e.start - now); left.textContent = `${p.d}d ${pad(p.h)}h ${pad(p.m)}m`; }
+  });
+
+  const next = EXAMS.find(e => now < e.end);
+  if (!next) {
+    $("hState").textContent = "Done";
+    $("hCourse").textContent = "All midterms finished";
+    $("hMeta").textContent = "Good luck with the rest of the semester.";
+    $("clock").style.display = "none";
+    return;
+  }
+  const live = now >= next.start;
+  const p = parts((live ? next.end : next.start) - now);
+  $("hState").textContent = live ? "In progress, time left" : "Next exam";
+  $("hCourse").textContent = next.course;
+  $("hMeta").textContent = `${dayFmt.format(next.start)} (${next.hijri} AH), ${next.from} to ${next.to}, Building 80A, rooms ${next.rooms}`;
+  $("cD").textContent = p.d;
+  $("cH").textContent = pad(p.h);
+  $("cM").textContent = pad(p.m);
+  $("cS").textContent = pad(p.s);
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
